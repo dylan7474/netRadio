@@ -191,7 +191,7 @@
                 </div>
 
                 <!-- Volume Control -->
-                <div class="w-full space-y-3 px-6">
+                <div class="w-full space-y-3 px-6 mb-6">
                     <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                         <div class="flex items-center gap-2">
                             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.414 4.243 1 1 0 11-1.415-1.415A3.987 3.987 0 0013 10a3.987 3.987 0 00-1.414-2.828 1 1 0 010-1.415z" clip-rule="evenodd"></path></svg>
@@ -201,6 +201,49 @@
                     </div>
                     <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.8" 
                            class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 hover:accent-sky-400 transition">
+                </div>
+
+                <!-- Sleep-friendly Noise Generator -->
+                <div class="w-full glass rounded-2xl p-4 space-y-4 text-left">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Sleep-friendly noise</h3>
+                        <button id="noise-toggle-btn" class="text-[10px] px-3 py-1 rounded-full bg-slate-700 hover:bg-slate-600 transition uppercase tracking-wider font-semibold">Noise Off</button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                            <span>Noise Level</span>
+                            <span id="noise-level-label">20%</span>
+                        </div>
+                        <input type="range" id="noise-level-slider" min="0" max="1" step="0.01" value="0.2"
+                               class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition">
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                            <span>Balance (Radio ↔ Noise)</span>
+                            <span id="balance-label">Radio</span>
+                        </div>
+                        <input type="range" id="balance-slider" min="-1" max="1" step="0.01" value="-1"
+                               class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-500 hover:accent-violet-400 transition">
+                    </div>
+                </div>
+
+                <!-- Sleep Timer -->
+                <div class="w-full glass rounded-2xl p-4 mt-4 space-y-3 text-left">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Sleep timer</h3>
+                    <div class="flex items-center gap-2">
+                        <select id="sleep-timer-select" class="flex-1 bg-slate-800/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <option value="0">Off</option>
+                            <option value="10">10 minutes</option>
+                            <option value="20">20 minutes</option>
+                            <option value="30">30 minutes</option>
+                            <option value="45">45 minutes</option>
+                            <option value="60">60 minutes</option>
+                        </select>
+                        <button id="sleep-timer-btn" class="px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-sky-500 hover:bg-sky-400 transition">Set</button>
+                    </div>
+                    <p id="sleep-timer-status" class="text-[10px] text-slate-400">No timer active.</p>
                 </div>
             </div>
         </section>
@@ -237,6 +280,13 @@
         
         let stations = [];
         let currentStation = null;
+        let audioContext;
+        let noiseGain;
+        let noiseSource;
+        let isNoiseEnabled = false;
+        let sleepTimerId = null;
+        let sleepTimerEndsAt = null;
+        let sleepTimerTickerId = null;
 
         // Gemini API Utility
         async function callGemini(prompt, systemInstruction = "") {
@@ -405,8 +455,113 @@
         window.onload = async () => {
             await initializeApi();
             filterStations('music');
+            initializeAudioGraph();
             setupEventListeners();
+            updateMixFromBalance(-1);
         };
+
+        function initializeAudioGraph() {
+            if (audioContext) return;
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            noiseGain = audioContext.createGain();
+            noiseGain.gain.value = 0.2;
+            noiseGain.connect(audioContext.destination);
+        }
+
+        async function ensureAudioContextReady() {
+            if (!audioContext) initializeAudioGraph();
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+        }
+
+        function createNoiseBuffer() {
+            const bufferSize = audioContext.sampleRate * 2;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = (Math.random() * 2 - 1) * 0.5;
+            }
+            return buffer;
+        }
+
+        async function toggleNoise() {
+            await ensureAudioContextReady();
+            const btn = document.getElementById('noise-toggle-btn');
+
+            if (isNoiseEnabled) {
+                noiseSource?.stop();
+                noiseSource = null;
+                isNoiseEnabled = false;
+                btn.innerText = 'Noise Off';
+                btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400');
+                btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
+                return;
+            }
+
+            noiseSource = audioContext.createBufferSource();
+            noiseSource.buffer = createNoiseBuffer();
+            noiseSource.loop = true;
+            noiseSource.connect(noiseGain);
+            noiseSource.start();
+            isNoiseEnabled = true;
+            btn.innerText = 'Noise On';
+            btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+            btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
+        }
+
+        function updateMixFromBalance(balanceValue) {
+            const normalized = (Number(balanceValue) + 1) / 2;
+            const streamLevel = 1 - normalized;
+            const noiseLevel = normalized;
+
+            const streamBase = Number(document.getElementById('volume-slider')?.value || 0.8);
+            audio.volume = streamBase * streamLevel;
+            document.getElementById('volume-label').innerText = `${Math.round(audio.volume * 100)}%`;
+
+            const noiseBase = Number(document.getElementById('noise-level-slider')?.value || 0.2);
+            if (noiseGain) noiseGain.gain.value = noiseBase * noiseLevel;
+
+            const balanceLabel = document.getElementById('balance-label');
+            if (normalized <= 0.05) balanceLabel.innerText = 'Radio';
+            else if (normalized >= 0.95) balanceLabel.innerText = 'Noise';
+            else balanceLabel.innerText = `${Math.round(normalized * 100)}% Noise`;
+        }
+
+        function clearSleepTimer(showNotice = true) {
+            if (sleepTimerId) clearTimeout(sleepTimerId);
+            if (sleepTimerTickerId) clearInterval(sleepTimerTickerId);
+            sleepTimerId = null;
+            sleepTimerTickerId = null;
+            sleepTimerEndsAt = null;
+            if (showNotice) document.getElementById('sleep-timer-status').innerText = 'No timer active.';
+        }
+
+        function startSleepTimer(minutes) {
+            clearSleepTimer(false);
+
+            if (!minutes) {
+                document.getElementById('sleep-timer-status').innerText = 'No timer active.';
+                return;
+            }
+
+            sleepTimerEndsAt = Date.now() + minutes * 60 * 1000;
+            sleepTimerId = setTimeout(() => {
+                audio.pause();
+                setPlayingState(false);
+                clearSleepTimer(false);
+                document.getElementById('sleep-timer-status').innerText = `Timer ended: playback paused.`;
+            }, minutes * 60 * 1000);
+
+            sleepTimerTickerId = setInterval(() => {
+                const remainingMs = sleepTimerEndsAt - Date.now();
+                if (remainingMs <= 0) return;
+                const remainingMin = Math.ceil(remainingMs / 60000);
+                document.getElementById('sleep-timer-status').innerText = `Sleep timer active: ${remainingMin} min remaining.`;
+            }, 1000);
+
+            document.getElementById('sleep-timer-status').innerText = `Sleep timer active: ${minutes} min remaining.`;
+        }
 
         async function initializeApi() {
             try {
@@ -421,9 +576,24 @@
 
         function setupEventListeners() {
             document.getElementById('volume-slider').addEventListener('input', (e) => {
-                const val = e.target.value;
-                audio.volume = val;
-                document.getElementById('volume-label').innerText = `${Math.round(val * 100)}%`;
+                updateMixFromBalance(document.getElementById('balance-slider').value);
+            });
+
+            document.getElementById('noise-toggle-btn').addEventListener('click', toggleNoise);
+            document.getElementById('noise-level-slider').addEventListener('input', (e) => {
+                const val = Number(e.target.value);
+                document.getElementById('noise-level-label').innerText = `${Math.round(val * 100)}%`;
+                const balance = Number(document.getElementById('balance-slider').value);
+                updateMixFromBalance(balance);
+            });
+
+            document.getElementById('balance-slider').addEventListener('input', (e) => {
+                updateMixFromBalance(e.target.value);
+            });
+
+            document.getElementById('sleep-timer-btn').addEventListener('click', () => {
+                const minutes = Number(document.getElementById('sleep-timer-select').value);
+                startSleepTimer(minutes);
             });
 
             document.getElementById('play-pause-btn').addEventListener('click', togglePlay);
@@ -548,6 +718,7 @@
         }
 
         async function playStation(uuid) {
+            await ensureAudioContextReady();
             const station = stations.find(s => s.stationuuid === uuid);
             if (!station) return;
             currentStation = station;
@@ -585,7 +756,8 @@
             } catch (err) { console.error(err); }
         }
 
-        function togglePlay() {
+        async function togglePlay() {
+            await ensureAudioContextReady();
             if (audio.paused) {
                 audio.play().then(() => setPlayingState(true)).catch(() => {});
             } else {

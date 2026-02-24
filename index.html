@@ -194,7 +194,7 @@
                 <div class="w-full glass rounded-2xl p-4 space-y-4 text-left">
                     <div class="flex items-center justify-between">
                         <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Sleep-friendly noise</h3>
-                        <button id="noise-toggle-btn" class="text-[10px] px-3 py-1 rounded-full bg-slate-700 hover:bg-slate-600 transition uppercase tracking-wider font-semibold">Noise Off</button>
+                        <button id="noise-toggle-btn" class="text-[10px] px-3 py-1 rounded-full bg-slate-700 hover:bg-slate-600 transition uppercase tracking-wider font-semibold">OFF</button>
                     </div>
 
                     <div class="space-y-2">
@@ -239,6 +239,12 @@
 
     <script>
         const apiKey = ""; // Runtime provides the key
+        const NOISE_MODE_LABELS = {
+            off: 'OFF',
+            white: 'WHITE NOISE',
+            blue: 'BLUE NOISE',
+            pink: 'PINK NOISE'
+        };
 
         const FALLBACK_STATIONS = [
             { stationuuid: 'fb1', name: 'BBC World Service', tags: 'news,talk,world', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service', favicon: 'https://www.bbc.co.uk/favicon.ico' },
@@ -261,7 +267,8 @@
         let audioContext;
         let noiseGain;
         let noiseSource;
-        let isNoiseEnabled = false;
+        const NOISE_MODES = ['off', 'white', 'blue', 'pink'];
+        let currentNoiseModeIndex = 0;
         let sleepTimerId = null;
         let sleepTimerEndsAt = null;
         let sleepTimerTickerId = null;
@@ -453,10 +460,46 @@
             }
         }
 
-        function createNoiseBuffer() {
+        function createNoiseBuffer(mode) {
             const bufferSize = audioContext.sampleRate * 2;
             const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
             const output = buffer.getChannelData(0);
+
+            if (mode === 'pink') {
+                let b0 = 0;
+                let b1 = 0;
+                let b2 = 0;
+                let b3 = 0;
+                let b4 = 0;
+                let b5 = 0;
+                let b6 = 0;
+
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    b6 = white * 0.115926;
+                    output[i] = pink * 0.09;
+                }
+                return buffer;
+            }
+
+            if (mode === 'blue') {
+                let previousWhite = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    const blue = white - previousWhite;
+                    previousWhite = white;
+                    output[i] = blue * 0.35;
+                }
+                return buffer;
+            }
+
             for (let i = 0; i < bufferSize; i++) {
                 output[i] = (Math.random() * 2 - 1) * 0.5;
             }
@@ -466,26 +509,28 @@
         async function toggleNoise() {
             await ensureAudioContextReady();
             const btn = document.getElementById('noise-toggle-btn');
+            const nextMode = NOISE_MODES[(currentNoiseModeIndex + 1) % NOISE_MODES.length];
 
-            if (isNoiseEnabled) {
-                noiseSource?.stop();
-                noiseSource = null;
-                isNoiseEnabled = false;
+            noiseSource?.stop();
+            noiseSource = null;
+            currentNoiseModeIndex = (currentNoiseModeIndex + 1) % NOISE_MODES.length;
+
+            if (nextMode === 'off') {
                 if (noiseGain) noiseGain.gain.value = 0;
-                btn.innerText = 'Noise Off';
+                btn.innerText = NOISE_MODE_LABELS.off;
                 btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400');
                 btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
                 return;
             }
 
             noiseSource = audioContext.createBufferSource();
-            noiseSource.buffer = createNoiseBuffer();
+            noiseSource.buffer = createNoiseBuffer(nextMode);
             noiseSource.loop = true;
             noiseSource.connect(noiseGain);
             noiseSource.start();
-            isNoiseEnabled = true;
+
             updateMixFromSlider(document.getElementById('mix-slider').value);
-            btn.innerText = 'Noise On';
+            btn.innerText = NOISE_MODE_LABELS[nextMode];
             btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
             btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
         }
@@ -496,7 +541,7 @@
             const streamLevel = 1 - noiseLevel;
 
             audio.volume = streamLevel;
-            if (noiseGain) noiseGain.gain.value = isNoiseEnabled ? noiseLevel : 0;
+            if (noiseGain) noiseGain.gain.value = NOISE_MODES[currentNoiseModeIndex] === 'off' ? 0 : noiseLevel;
 
             document.getElementById('mix-label').innerText = `${Math.round(noisePercent)}% noise • ${Math.round(streamLevel * 100)}% audio`;
         }

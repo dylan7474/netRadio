@@ -19,7 +19,7 @@ Inside the app UI:
 - **Category chips**: Filter stations by topic.
 - **Station list item**: Click to start playback.
 - **Play/Pause controls**: Manage stream playback.
-- **Sleep-friendly noise section**: Toggle generated white noise and use a single mix slider from 0% noise / 100% audio to 100% noise / 0% audio.
+- **Sleep-friendly noise section**: Tap the noise button to cycle `OFF → WHITE NOISE → BLUE NOISE → PINK NOISE → OFF`, then use the mix slider from 0% noise / 100% audio to 100% noise / 0% audio.
 - **Sleep timer**: Set a timer (10–60 minutes) to automatically pause playback.
 - **✨ Discover button**: Use prompt-style discovery for mood or context-based station ideas.
 

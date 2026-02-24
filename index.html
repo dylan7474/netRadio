@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global English Radio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #f8fafc;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .station-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .station-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .active-station {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Animated Visualizer */
+        .visualizer-bar {
+            width: 4px;
+            background: #38bdf8;
+            border-radius: 2px;
+            margin: 0 1px;
+            height: 4px;
+            transition: height 0.2s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% { height: 4px; }
+            50% { height: 24px; }
+        }
+
+        .playing .visualizer-bar {
+            animation: pulse 0.8s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-emerald-400">
+                    VoxCast
+                </h1>
+                <p class="text-slate-400 text-sm">Premium English Radio Discovery</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2" id="category-filters">
+                <button onclick="filterStations('music')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Music</button>
+                <button onclick="filterStations('talk')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Talk</button>
+                <button onclick="filterStations('science')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Science</button>
+                <button onclick="filterStations('technology')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Technology</button>
+                <button onclick="filterStations('news')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">News</button>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Station List -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="relative mb-6">
+                    <input type="text" id="search-input" placeholder="Search stations..." 
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 transition text-white">
+                </div>
+
+                <div id="loading" class="text-center py-20 hidden">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-sky-500 border-t-transparent"></div>
+                    <p class="mt-4 text-slate-400">Tuning in...</p>
+                </div>
+
+                <div id="station-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[600px] overflow-y-auto pr-2">
+                    <!-- Stations injected here -->
+                </div>
+            </div>
+
+            <!-- Player Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="glass rounded-3xl p-6 sticky top-8">
+                    <div id="player-placeholder" class="text-center py-12">
+                        <div class="w-24 h-24 bg-slate-800 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                            </svg>
+                        </div>
+                        <p class="text-slate-400">Select a station to start listening</p>
+                    </div>
+
+                    <div id="active-player" class="hidden">
+                        <div class="relative group mb-6">
+                            <img id="now-playing-img" src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=400" 
+                                 class="w-full aspect-square object-cover rounded-2xl shadow-2xl transition group-hover:scale-[1.02]">
+                            <div class="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <div id="visualizer" class="flex items-end space-x-1 h-12">
+                                    <div class="visualizer-bar" style="animation-delay: 0.1s"></div>
+                                    <div class="visualizer-bar" style="animation-delay: 0.3s"></div>
+                                    <div class="visualizer-bar" style="animation-delay: 0.2s"></div>
+                                    <div class="visualizer-bar" style="animation-delay: 0.4s"></div>
+                                    <div class="visualizer-bar" style="animation-delay: 0.1s"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mb-8">
+                            <h2 id="now-playing-name" class="text-xl font-bold truncate px-2">Station Name</h2>
+                            <p id="now-playing-tags" class="text-sky-400 text-xs uppercase tracking-widest mt-1">TAGS • GENRE</p>
+                        </div>
+
+                        <div class="flex items-center justify-center gap-6 mb-8">
+                            <button id="play-pause-btn" class="w-16 h-16 bg-sky-500 hover:bg-sky-400 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/20 transition transform active:scale-95">
+                                <svg id="play-icon" class="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                                <svg id="pause-icon" class="hidden w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1-1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                            </button>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs text-slate-400 px-1">
+                                <span>Volume</span>
+                                <span id="volume-label">80%</span>
+                            </div>
+                            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.8" 
+                                   class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-full shadow-2xl hidden z-50 transition-all duration-300">
+            Stream unavailable. Try another station.
+        </div>
+    </div>
+
+    <audio id="audio-player" class="hidden" preload="none"></audio>
+
+    <script>
+        // Reliability fallbacks: Hardcoded high-quality English streams in case API fails
+        const FALLBACK_STATIONS = [
+            { stationuuid: 'fb1', name: 'BBC World Service', tags: 'news,talk,world', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service', favicon: 'https://www.bbc.co.uk/favicon.ico' },
+            { stationuuid: 'fb2', name: 'Groove Salad (SomaFM)', tags: 'music,chill,ambient', url: 'https://ice1.somafm.com/groovesalad-256-mp3', favicon: 'https://somafm.com/img/groovesalad256.png' },
+            { stationuuid: 'fb3', name: 'WNYC FM', tags: 'talk,news,culture', url: 'https://wnyc.streaming.adswizz.com/wnyc-fm-939-mp3', favicon: 'https://www.wnyc.org/static/img/favicon.ico' },
+            { stationuuid: 'fb4', name: 'Science Friday', tags: 'science,talk,education', url: 'https://scifri.stream.publicradio.org/scifri.mp3', favicon: 'https://www.sciencefriday.com/wp-content/themes/scifri/img/favicon.ico' }
+        ];
+
+        let MIRRORS = ['https://de1.api.radio-browser.info/json'];
+        let currentMirror = MIRRORS[0];
+
+        const audio = document.getElementById('audio-player');
+        const stationGrid = document.getElementById('station-grid');
+        const loading = document.getElementById('loading');
+        const searchInput = document.getElementById('search-input');
+        const errorToast = document.getElementById('error-toast');
+        
+        let stations = [];
+        let currentStation = null;
+
+        window.onload = async () => {
+            await initializeApi();
+            filterStations('music');
+            setupEventListeners();
+        };
+
+        async function initializeApi() {
+            try {
+                // Discover best mirror
+                const res = await fetch('https://all.api.radio-browser.info/json/servers');
+                const servers = await res.json();
+                if (servers && servers.length > 0) {
+                    MIRRORS = servers.map(s => `https://${s.name}/json`);
+                    currentMirror = MIRRORS[0];
+                }
+            } catch (e) {
+                console.warn("Mirror discovery failed, using default");
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('volume-slider').addEventListener('input', (e) => {
+                audio.volume = e.target.value;
+                document.getElementById('volume-label').innerText = `${Math.round(e.target.value * 100)}%`;
+            });
+
+            document.getElementById('play-pause-btn').addEventListener('click', togglePlay);
+
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                renderStations(stations.filter(s => 
+                    s.name.toLowerCase().includes(term) || 
+                    (s.tags && s.tags.toLowerCase().includes(term))
+                ));
+            });
+
+            audio.onerror = () => {
+                if (currentStation && audio.src !== currentStation.url) {
+                   audio.src = currentStation.url;
+                   audio.play().catch(() => handleFatalError());
+                } else {
+                   handleFatalError();
+                }
+            };
+        }
+
+        function handleFatalError() {
+            showError("Stream unavailable. It might be blocked by browser security (Mixed Content).");
+            setPlayingState(false);
+        }
+
+        async function filterStations(category) {
+            const tagMap = {
+                'technology': 'technology',
+                'science': 'science',
+                'music': 'music',
+                'talk': 'talk',
+                'news': 'news'
+            };
+
+            const searchTag = tagMap[category];
+
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.classList.remove('bg-sky-500/40', 'border-sky-500');
+                if(btn.innerText.toLowerCase() === category.toLowerCase()) {
+                    btn.classList.add('bg-sky-500/40', 'border-sky-500');
+                }
+            });
+
+            stationGrid.innerHTML = '';
+            loading.classList.remove('hidden');
+
+            let results = [];
+            try {
+                // Try each mirror until one works
+                for (let mirror of MIRRORS) {
+                    try {
+                        const url = `${mirror}/stations/search?tag=${searchTag}&language=english&limit=60&order=clickcount&reverse=true&hidebroken=true`;
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            results = await response.json();
+                            break;
+                        }
+                    } catch (e) { continue; }
+                }
+
+                if (results.length === 0) throw new Error("No results");
+
+                // Clean results
+                stations = results.sort((a, b) => {
+                    const aSec = (a.url_resolved || a.url).startsWith('https');
+                    const bSec = (b.url_resolved || b.url).startsWith('https');
+                    return bSec - aSec;
+                }).slice(0, 40);
+
+            } catch (err) {
+                console.error("API failed, using fallbacks");
+                stations = FALLBACK_STATIONS.filter(s => s.tags.includes(category) || category === 'music');
+                if (stations.length === 0) stations = FALLBACK_STATIONS;
+                showError("Note: Using featured fallback stations. Radio API is unreachable.");
+            } finally {
+                loading.classList.add('hidden');
+                renderStations(stations);
+            }
+        }
+
+        function renderStations(data) {
+            if (!data || data.length === 0) {
+                stationGrid.innerHTML = '<div class="col-span-full py-12 text-center text-slate-500">No stations found.</div>';
+                return;
+            }
+            stationGrid.innerHTML = data.map(station => `
+                <div onclick="playStation('${station.stationuuid}')" 
+                     class="station-card glass p-4 rounded-2xl cursor-pointer flex items-center gap-4 border border-transparent"
+                     id="card-${station.stationuuid}">
+                    <div class="w-12 h-12 bg-slate-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                        ${station.favicon ? 
+                            `<img src="${station.favicon}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(station.name)}'" class="w-full h-full object-cover">` : 
+                            `<span class="text-sky-500 font-bold">${station.name[0]}</span>`
+                        }
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                             <h3 class="font-semibold text-sm truncate">${station.name}</h3>
+                             ${(station.url_resolved || station.url).startsWith('https') ? 
+                                '<svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>' : ''}
+                        </div>
+                        <p class="text-xs text-slate-400 truncate">${station.tags ? station.tags.split(',').slice(0, 3).join(', ') : ''}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function playStation(uuid) {
+            const station = stations.find(s => s.stationuuid === uuid);
+            if (!station) return;
+            currentStation = station;
+
+            document.querySelectorAll('.station-card').forEach(c => c.classList.remove('active-station'));
+            document.getElementById(`card-${uuid}`)?.classList.add('active-station');
+
+            document.getElementById('player-placeholder').classList.add('hidden');
+            const activePlayer = document.getElementById('active-player');
+            activePlayer.classList.remove('hidden');
+
+            document.getElementById('now-playing-name').innerText = station.name;
+            document.getElementById('now-playing-tags').innerText = station.tags ? station.tags.split(',').slice(0, 3).join(' • ') : 'RADIO';
+            
+            const playerImg = document.getElementById('now-playing-img');
+            playerImg.src = station.favicon || `https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=400`;
+
+            try {
+                audio.pause();
+                audio.removeAttribute('src');
+                audio.load();
+                
+                audio.src = station.url_resolved || station.url;
+                
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => setPlayingState(true))
+                               .catch(err => {
+                                   if (err.name !== 'AbortError') handleFatalError();
+                               });
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        function togglePlay() {
+            if (audio.paused) {
+                audio.play().then(() => setPlayingState(true)).catch(() => {});
+            } else {
+                audio.pause();
+                setPlayingState(false);
+            }
+        }
+
+        function setPlayingState(isPlaying) {
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            const visualizerContainer = document.getElementById('active-player');
+
+            if (isPlaying) {
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
+                visualizerContainer.classList.add('playing');
+            } else {
+                playIcon.classList.remove('hidden');
+                pauseIcon.classList.add('hidden');
+                visualizerContainer.classList.remove('playing');
+            }
+        }
+
+        function showError(msg) {
+            errorToast.innerText = msg;
+            errorToast.classList.remove('hidden');
+            setTimeout(() => errorToast.classList.add('hidden'), 6000);
+        }
+    </script>
+</body>
+</html>

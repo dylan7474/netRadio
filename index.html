@@ -190,19 +190,6 @@
                     </button>
                 </div>
 
-                <!-- Volume Control -->
-                <div class="w-full space-y-3 px-6 mb-6">
-                    <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.414 4.243 1 1 0 11-1.415-1.415A3.987 3.987 0 0013 10a3.987 3.987 0 00-1.414-2.828 1 1 0 010-1.415z" clip-rule="evenodd"></path></svg>
-                            Volume
-                        </div>
-                        <span id="volume-label">80%</span>
-                    </div>
-                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.8" 
-                           class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 hover:accent-sky-400 transition">
-                </div>
-
                 <!-- Sleep-friendly Noise Generator -->
                 <div class="w-full glass rounded-2xl p-4 space-y-4 text-left">
                     <div class="flex items-center justify-between">
@@ -212,19 +199,10 @@
 
                     <div class="space-y-2">
                         <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            <span>Noise Level</span>
-                            <span id="noise-level-label">20%</span>
+                            <span>Mix (0% Noise / 100% Audio → 100% Noise / 0% Audio)</span>
+                            <span id="mix-label">0% noise • 100% audio</span>
                         </div>
-                        <input type="range" id="noise-level-slider" min="0" max="1" step="0.01" value="0.2"
-                               class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition">
-                    </div>
-
-                    <div class="space-y-2">
-                        <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            <span>Balance (Radio ↔ Noise)</span>
-                            <span id="balance-label">Radio</span>
-                        </div>
-                        <input type="range" id="balance-slider" min="-1" max="1" step="0.01" value="-1"
+                        <input type="range" id="mix-slider" min="0" max="100" step="1" value="0"
                                class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-500 hover:accent-violet-400 transition">
                     </div>
                 </div>
@@ -457,14 +435,14 @@
             filterStations('music');
             initializeAudioGraph();
             setupEventListeners();
-            updateMixFromBalance(-1);
+            updateMixFromSlider(0);
         };
 
         function initializeAudioGraph() {
             if (audioContext) return;
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             noiseGain = audioContext.createGain();
-            noiseGain.gain.value = 0.2;
+            noiseGain.gain.value = 0;
             noiseGain.connect(audioContext.destination);
         }
 
@@ -493,6 +471,7 @@
                 noiseSource?.stop();
                 noiseSource = null;
                 isNoiseEnabled = false;
+                if (noiseGain) noiseGain.gain.value = 0;
                 btn.innerText = 'Noise Off';
                 btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400');
                 btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
@@ -505,27 +484,21 @@
             noiseSource.connect(noiseGain);
             noiseSource.start();
             isNoiseEnabled = true;
+            updateMixFromSlider(document.getElementById('mix-slider').value);
             btn.innerText = 'Noise On';
             btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
             btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
         }
 
-        function updateMixFromBalance(balanceValue) {
-            const normalized = (Number(balanceValue) + 1) / 2;
-            const streamLevel = 1 - normalized;
-            const noiseLevel = normalized;
+        function updateMixFromSlider(noisePercentValue) {
+            const noisePercent = Math.min(100, Math.max(0, Number(noisePercentValue) || 0));
+            const noiseLevel = noisePercent / 100;
+            const streamLevel = 1 - noiseLevel;
 
-            const streamBase = Number(document.getElementById('volume-slider')?.value || 0.8);
-            audio.volume = streamBase * streamLevel;
-            document.getElementById('volume-label').innerText = `${Math.round(audio.volume * 100)}%`;
+            audio.volume = streamLevel;
+            if (noiseGain) noiseGain.gain.value = isNoiseEnabled ? noiseLevel : 0;
 
-            const noiseBase = Number(document.getElementById('noise-level-slider')?.value || 0.2);
-            if (noiseGain) noiseGain.gain.value = noiseBase * noiseLevel;
-
-            const balanceLabel = document.getElementById('balance-label');
-            if (normalized <= 0.05) balanceLabel.innerText = 'Radio';
-            else if (normalized >= 0.95) balanceLabel.innerText = 'Noise';
-            else balanceLabel.innerText = `${Math.round(normalized * 100)}% Noise`;
+            document.getElementById('mix-label').innerText = `${Math.round(noisePercent)}% noise • ${Math.round(streamLevel * 100)}% audio`;
         }
 
         function clearSleepTimer(showNotice = true) {
@@ -575,20 +548,10 @@
         }
 
         function setupEventListeners() {
-            document.getElementById('volume-slider').addEventListener('input', (e) => {
-                updateMixFromBalance(document.getElementById('balance-slider').value);
-            });
-
             document.getElementById('noise-toggle-btn').addEventListener('click', toggleNoise);
-            document.getElementById('noise-level-slider').addEventListener('input', (e) => {
-                const val = Number(e.target.value);
-                document.getElementById('noise-level-label').innerText = `${Math.round(val * 100)}%`;
-                const balance = Number(document.getElementById('balance-slider').value);
-                updateMixFromBalance(balance);
-            });
 
-            document.getElementById('balance-slider').addEventListener('input', (e) => {
-                updateMixFromBalance(e.target.value);
+            document.getElementById('mix-slider').addEventListener('input', (e) => {
+                updateMixFromSlider(e.target.value);
             });
 
             document.getElementById('sleep-timer-btn').addEventListener('click', () => {

@@ -8,10 +8,12 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         
-        body {
+        body, html {
             font-family: 'Inter', sans-serif;
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            min-height: 100vh;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
             color: #f8fafc;
         }
 
@@ -23,153 +25,200 @@
         }
 
         .station-card {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .station-card:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(4px);
         }
 
         .active-station {
-            border-color: #38bdf8;
+            border-left: 4px solid #38bdf8;
             background: rgba(56, 189, 248, 0.1);
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
+        /* Custom Scrollbar for internal scrolling */
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
         }
-        ::-webkit-scrollbar-track {
+        .custom-scroll::-webkit-scrollbar-track {
             background: transparent;
         }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
         }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
 
-        /* Animated Visualizer */
+        /* Visualizer Animation */
         .visualizer-bar {
-            width: 4px;
+            width: 6px;
             background: #38bdf8;
-            border-radius: 2px;
-            margin: 0 1px;
+            border-radius: 3px;
+            margin: 0 2px;
             height: 4px;
             transition: height 0.2s ease;
         }
 
         @keyframes pulse {
-            0%, 100% { height: 4px; }
-            50% { height: 24px; }
+            0%, 100% { height: 8px; }
+            50% { height: 40px; }
         }
 
         .playing .visualizer-bar {
             animation: pulse 0.8s infinite ease-in-out;
         }
+
+        .glow-btn {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+        .glow-btn:hover {
+            box-shadow: 0 0 35px rgba(56, 189, 248, 0.5);
+        }
+
+        /* Shimmer Effect for AI loading */
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="flex flex-col h-screen overflow-hidden">
 
-    <div class="max-w-5xl mx-auto">
-        <!-- Header -->
-        <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <!-- Top Header & Category Bar -->
+    <header class="p-6 pb-2 border-b border-white/5 flex-shrink-0">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-emerald-400">
-                    VoxCast
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-emerald-400">
+                    VoxCast AI
                 </h1>
-                <p class="text-slate-400 text-sm">Premium English Radio Discovery</p>
+                <p class="text-slate-400 text-xs uppercase tracking-widest font-semibold">Intelligent English Radio</p>
             </div>
-
-            <div class="flex flex-wrap gap-2" id="category-filters">
-                <button onclick="filterStations('music')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Music</button>
-                <button onclick="filterStations('talk')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Talk</button>
-                <button onclick="filterStations('science')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Science</button>
-                <button onclick="filterStations('technology')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">Technology</button>
-                <button onclick="filterStations('news')" class="cat-btn px-4 py-2 rounded-full glass text-sm hover:bg-sky-500/20 transition">News</button>
-            </div>
-        </header>
-
-        <!-- Main Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <!-- Station List -->
-            <div class="lg:col-span-2 space-y-4">
-                <div class="relative mb-6">
-                    <input type="text" id="search-input" placeholder="Search stations..." 
-                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 transition text-white">
-                </div>
-
-                <div id="loading" class="text-center py-20 hidden">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-sky-500 border-t-transparent"></div>
-                    <p class="mt-4 text-slate-400">Tuning in...</p>
-                </div>
-
-                <div id="station-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[600px] overflow-y-auto pr-2">
-                    <!-- Stations injected here -->
-                </div>
-            </div>
-
-            <!-- Player Sidebar -->
-            <div class="lg:col-span-1">
-                <div class="glass rounded-3xl p-6 sticky top-8">
-                    <div id="player-placeholder" class="text-center py-12">
-                        <div class="w-24 h-24 bg-slate-800 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                            <svg class="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                            </svg>
-                        </div>
-                        <p class="text-slate-400">Select a station to start listening</p>
-                    </div>
-
-                    <div id="active-player" class="hidden">
-                        <div class="relative group mb-6">
-                            <img id="now-playing-img" src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=400" 
-                                 class="w-full aspect-square object-cover rounded-2xl shadow-2xl transition group-hover:scale-[1.02]">
-                            <div class="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                <div id="visualizer" class="flex items-end space-x-1 h-12">
-                                    <div class="visualizer-bar" style="animation-delay: 0.1s"></div>
-                                    <div class="visualizer-bar" style="animation-delay: 0.3s"></div>
-                                    <div class="visualizer-bar" style="animation-delay: 0.2s"></div>
-                                    <div class="visualizer-bar" style="animation-delay: 0.4s"></div>
-                                    <div class="visualizer-bar" style="animation-delay: 0.1s"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-center mb-8">
-                            <h2 id="now-playing-name" class="text-xl font-bold truncate px-2">Station Name</h2>
-                            <p id="now-playing-tags" class="text-sky-400 text-xs uppercase tracking-widest mt-1">TAGS • GENRE</p>
-                        </div>
-
-                        <div class="flex items-center justify-center gap-6 mb-8">
-                            <button id="play-pause-btn" class="w-16 h-16 bg-sky-500 hover:bg-sky-400 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/20 transition transform active:scale-95">
-                                <svg id="play-icon" class="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
-                                <svg id="pause-icon" class="hidden w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1-1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-                            </button>
-                        </div>
-
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-xs text-slate-400 px-1">
-                                <span>Volume</span>
-                                <span id="volume-label">80%</span>
-                            </div>
-                            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.8" 
-                                   class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500">
-                        </div>
-                    </div>
-                </div>
+            <div class="flex flex-wrap gap-2" id="category-filters">
+                <button onclick="filterStations('music')" class="cat-btn px-4 py-1.5 rounded-full glass text-sm hover:bg-sky-500/20 transition">Music</button>
+                <button onclick="filterStations('talk')" class="cat-btn px-4 py-1.5 rounded-full glass text-sm hover:bg-sky-500/20 transition">Talk</button>
+                <button onclick="filterStations('science')" class="cat-btn px-4 py-1.5 rounded-full glass text-sm hover:bg-sky-500/20 transition">Science</button>
+                <button onclick="filterStations('technology')" class="cat-btn px-4 py-1.5 rounded-full glass text-sm hover:bg-sky-500/20 transition">Technology</button>
+                <button onclick="filterStations('news')" class="cat-btn px-4 py-1.5 rounded-full glass text-sm hover:bg-sky-500/20 transition">News</button>
             </div>
         </div>
+    </header>
 
-        <div id="error-toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-full shadow-2xl hidden z-50 transition-all duration-300">
-            Stream unavailable. Try another station.
+    <!-- Main Content Area (Station List and Big Player) -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto w-full">
+        
+        <!-- Left: Station Discovery -->
+        <section class="w-full lg:w-3/5 flex flex-col p-6 overflow-hidden border-r border-white/5">
+            <div class="mb-4 flex-shrink-0 space-y-3">
+                <div class="relative group">
+                    <input type="text" id="search-input" placeholder="Search thousands of stations..." 
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500 transition text-white placeholder-slate-500">
+                    <button id="ai-discover-btn" onclick="discoverWithAI()" class="absolute right-2 top-2 px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+                        <span>✨ Discover</span>
+                    </button>
+                </div>
+                <p class="text-[10px] text-slate-500 ml-1">Tip: Click ✨ Discover to find stations by mood like "Late night coding" or "Rainy day jazz".</p>
+            </div>
+
+            <div id="loading" class="flex-1 flex flex-col items-center justify-center hidden">
+                <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-sky-500 border-t-transparent"></div>
+                <p class="mt-4 text-slate-400">Scanning the airwaves...</p>
+            </div>
+
+            <div id="station-grid" class="flex-1 overflow-y-auto custom-scroll pr-2 space-y-2">
+                <!-- Stations go here -->
+            </div>
+        </section>
+
+        <!-- Right: Prominent Player Controls -->
+        <section class="w-full lg:w-2/5 flex flex-col p-8 items-center justify-center bg-black/20">
+            
+            <div id="player-placeholder" class="text-center py-20 flex flex-col items-center">
+                <div class="w-32 h-32 bg-slate-800 rounded-3xl mb-6 flex items-center justify-center shadow-inner">
+                    <svg class="w-16 h-16 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-medium text-slate-300">No Station Selected</h3>
+                <p class="text-slate-500 mt-2">Pick a station from the list to start streaming.</p>
+            </div>
+
+            <div id="active-player" class="hidden w-full max-w-sm flex flex-col items-center text-center">
+                <!-- Large Album Art / Icon -->
+                <div class="relative mb-8 group">
+                    <img id="now-playing-img" src="" class="w-60 h-60 object-cover rounded-3xl shadow-2xl glass border-4 border-white/10">
+                    <div class="absolute -bottom-4 -right-4 w-16 h-16 bg-sky-500 rounded-2xl flex items-center justify-center shadow-xl z-10" id="visualizer-container">
+                        <div id="visualizer" class="flex items-end h-6">
+                            <div class="visualizer-bar" style="animation-delay: 0.1s"></div>
+                            <div class="visualizer-bar" style="animation-delay: 0.3s"></div>
+                            <div class="visualizer-bar" style="animation-delay: 0.2s"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6 w-full overflow-hidden">
+                    <h2 id="now-playing-name" class="text-2xl font-bold truncate mb-1">Station Name</h2>
+                    <p id="now-playing-tags" class="text-sky-400 text-[10px] font-semibold uppercase tracking-widest truncate">TAGS • GENRE</p>
+                </div>
+
+                <!-- AI Insight Box -->
+                <div id="ai-insight-box" class="w-full glass rounded-2xl p-4 mb-8 text-left relative overflow-hidden hidden">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs font-bold text-sky-400 uppercase tracking-tighter">✨ AI Insight</span>
+                    </div>
+                    <p id="ai-insight-text" class="text-xs text-slate-300 italic leading-relaxed">Analyzing the vibe...</p>
+                </div>
+                
+                <button id="get-insight-btn" onclick="getStationInsight()" class="mb-8 text-[10px] font-bold text-slate-500 hover:text-sky-400 uppercase tracking-widest transition flex items-center gap-1.5">
+                    <span>✨ Get AI Insight</span>
+                </button>
+
+                <!-- Big Prominent Controls -->
+                <div class="flex items-center justify-center gap-10 mb-8 w-full">
+                    <button id="play-pause-btn" class="w-20 h-20 bg-sky-500 hover:bg-sky-400 rounded-full flex items-center justify-center transition-all transform active:scale-90 glow-btn group">
+                        <svg id="play-icon" class="w-10 h-10 text-white ml-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                        <svg id="pause-icon" class="hidden w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Volume Control -->
+                <div class="w-full space-y-3 px-6">
+                    <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.414 4.243 1 1 0 11-1.415-1.415A3.987 3.987 0 0013 10a3.987 3.987 0 00-1.414-2.828 1 1 0 010-1.415z" clip-rule="evenodd"></path></svg>
+                            Volume
+                        </div>
+                        <span id="volume-label">80%</span>
+                    </div>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.8" 
+                           class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 hover:accent-sky-400 transition">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Error Messaging -->
+    <div id="error-toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-4 rounded-2xl shadow-2xl hidden z-50 border border-white/20">
+        <div class="flex items-center gap-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span id="error-text">Stream unavailable.</span>
         </div>
     </div>
 
     <audio id="audio-player" class="hidden" preload="none"></audio>
 
     <script>
-        // Reliability fallbacks: Hardcoded high-quality English streams in case API fails
+        const apiKey = ""; // Runtime provides the key
+
         const FALLBACK_STATIONS = [
             { stationuuid: 'fb1', name: 'BBC World Service', tags: 'news,talk,world', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service', favicon: 'https://www.bbc.co.uk/favicon.ico' },
             { stationuuid: 'fb2', name: 'Groove Salad (SomaFM)', tags: 'music,chill,ambient', url: 'https://ice1.somafm.com/groovesalad-256-mp3', favicon: 'https://somafm.com/img/groovesalad256.png' },
@@ -189,6 +238,172 @@
         let stations = [];
         let currentStation = null;
 
+        // Gemini API Utility
+        async function callGemini(prompt, systemInstruction = "") {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    }
+                } catch (e) {}
+                await new Promise(r => setTimeout(r, delay));
+                delay *= 2;
+            }
+            return null;
+        }
+
+        async function callGeminiTTS(text) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: text }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Puck" }
+                        }
+                    }
+                }
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const pcmData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                    const sampleRate = parseInt(data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType.split('rate=')[1]) || 24000;
+                    if (pcmData) playWavFromPcm(pcmData, sampleRate);
+                }
+            } catch (e) {
+                console.error("TTS failed", e);
+            }
+        }
+
+        function playWavFromPcm(base64Pcm, sampleRate) {
+            const binaryString = atob(base64Pcm);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+            
+            // PCM16 to WAV conversion
+            const wavHeader = new ArrayBuffer(44);
+            const view = new DataView(wavHeader);
+            view.setUint32(0, 0x52494646, false); // "RIFF"
+            view.setUint32(4, 36 + bytes.length, true);
+            view.setUint32(8, 0x57415645, false); // "WAVE"
+            view.setUint32(12, 0x666d7420, false); // "fmt "
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM
+            view.setUint16(22, 1, true); // Mono
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            view.setUint32(36, 0x64617461, false); // "data"
+            view.setUint32(40, bytes.length, true);
+
+            const blob = new Blob([wavHeader, bytes], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            const ttsAudio = new Audio(url);
+            ttsAudio.volume = audio.volume;
+            ttsAudio.play();
+        }
+
+        // Feature 1: AI Discovery Assistant
+        async function discoverWithAI() {
+            const query = searchInput.value.trim();
+            if (!query) {
+                showError("Please type a mood or activity (e.g., 'coding session') first.");
+                return;
+            }
+
+            const btn = document.getElementById('ai-discover-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "✨ Thinking...";
+            btn.disabled = true;
+
+            const prompt = `The user wants to find radio stations for: "${query}". 
+            Respond with ONLY a comma-separated list of 2-3 specific tags that would exist in a radio directory (like "jazz,instrumental" or "news,politics"). 
+            Avoid generic words. Use English tags.`;
+            
+            const suggestedTags = await callGemini(prompt, "You are an expert radio discovery assistant. Respond only with tags.");
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+
+            if (suggestedTags) {
+                searchInput.value = suggestedTags.trim();
+                filterStationsByCustomTags(suggestedTags.trim());
+            } else {
+                showError("AI was unable to process the request. Try again.");
+            }
+        }
+
+        async function filterStationsByCustomTags(tags) {
+            stationGrid.innerHTML = '';
+            loading.classList.remove('hidden');
+
+            let results = [];
+            try {
+                const url = `${currentMirror}/stations/search?tagList=${encodeURIComponent(tags)}&language=english&limit=40&order=clickcount&reverse=true&hidebroken=true`;
+                const response = await fetch(url);
+                if (response.ok) results = await response.json();
+                
+                stations = results;
+                renderStations(stations);
+            } catch (e) {
+                showError("Search failed.");
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        // Feature 2: AI Insight
+        async function getStationInsight() {
+            if (!currentStation) return;
+
+            const box = document.getElementById('ai-insight-box');
+            const text = document.getElementById('ai-insight-text');
+            const btn = document.getElementById('get-insight-btn');
+            
+            box.classList.remove('hidden');
+            box.classList.add('shimmer');
+            text.innerText = "Analyzing the vibe...";
+            btn.classList.add('opacity-50', 'pointer-events-none');
+
+            const prompt = `Analyze this radio station. Name: "${currentStation.name}". Tags: "${currentStation.tags}". 
+            Describe its 'vibe' and tell me what specific activity or person it's perfect for. 
+            Keep it to exactly one catchy, welcoming sentence.`;
+
+            const insight = await callGemini(prompt, "You are a witty, music-loving AI radio concierge.");
+            
+            box.classList.remove('shimmer');
+            btn.classList.remove('opacity-50', 'pointer-events-none');
+            
+            if (insight) {
+                text.innerText = insight.trim();
+            } else {
+                text.innerText = "This station sounds like a hidden gem! Perfect for discovery.";
+            }
+        }
+
         window.onload = async () => {
             await initializeApi();
             filterStations('music');
@@ -197,22 +412,20 @@
 
         async function initializeApi() {
             try {
-                // Discover best mirror
                 const res = await fetch('https://all.api.radio-browser.info/json/servers');
                 const servers = await res.json();
                 if (servers && servers.length > 0) {
                     MIRRORS = servers.map(s => `https://${s.name}/json`);
                     currentMirror = MIRRORS[0];
                 }
-            } catch (e) {
-                console.warn("Mirror discovery failed, using default");
-            }
+            } catch (e) { console.warn("Mirror discovery failed"); }
         }
 
         function setupEventListeners() {
             document.getElementById('volume-slider').addEventListener('input', (e) => {
-                audio.volume = e.target.value;
-                document.getElementById('volume-label').innerText = `${Math.round(e.target.value * 100)}%`;
+                const val = e.target.value;
+                audio.volume = val;
+                document.getElementById('volume-label').innerText = `${Math.round(val * 100)}%`;
             });
 
             document.getElementById('play-pause-btn').addEventListener('click', togglePlay);
@@ -236,7 +449,7 @@
         }
 
         function handleFatalError() {
-            showError("Stream unavailable. It might be blocked by browser security (Mixed Content).");
+            showError("Stream unavailable. It might be blocked by browser security or the station is offline.");
             setPlayingState(false);
         }
 
@@ -263,7 +476,6 @@
 
             let results = [];
             try {
-                // Try each mirror until one works
                 for (let mirror of MIRRORS) {
                     try {
                         const url = `${mirror}/stations/search?tag=${searchTag}&language=english&limit=60&order=clickcount&reverse=true&hidebroken=true`;
@@ -277,18 +489,16 @@
 
                 if (results.length === 0) throw new Error("No results");
 
-                // Clean results
                 stations = results.sort((a, b) => {
                     const aSec = (a.url_resolved || a.url).startsWith('https');
                     const bSec = (b.url_resolved || b.url).startsWith('https');
                     return bSec - aSec;
-                }).slice(0, 40);
+                }).slice(0, 50);
 
             } catch (err) {
-                console.error("API failed, using fallbacks");
                 stations = FALLBACK_STATIONS.filter(s => s.tags.includes(category) || category === 'music');
                 if (stations.length === 0) stations = FALLBACK_STATIONS;
-                showError("Note: Using featured fallback stations. Radio API is unreachable.");
+                showError("Using featured fallbacks. API connectivity limited.");
             } finally {
                 loading.classList.add('hidden');
                 renderStations(stations);
@@ -302,12 +512,12 @@
             }
             stationGrid.innerHTML = data.map(station => `
                 <div onclick="playStation('${station.stationuuid}')" 
-                     class="station-card glass p-4 rounded-2xl cursor-pointer flex items-center gap-4 border border-transparent"
+                     class="station-card glass p-4 rounded-xl cursor-pointer flex items-center gap-4 border border-transparent mb-2"
                      id="card-${station.stationuuid}">
-                    <div class="w-12 h-12 bg-slate-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                    <div class="w-10 h-10 bg-slate-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
                         ${station.favicon ? 
                             `<img src="${station.favicon}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(station.name)}'" class="w-full h-full object-cover">` : 
-                            `<span class="text-sky-500 font-bold">${station.name[0]}</span>`
+                            `<span class="text-sky-500 font-bold text-xs">${station.name[0]}</span>`
                         }
                     </div>
                     <div class="min-w-0 flex-1">
@@ -316,7 +526,7 @@
                              ${(station.url_resolved || station.url).startsWith('https') ? 
                                 '<svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>' : ''}
                         </div>
-                        <p class="text-xs text-slate-400 truncate">${station.tags ? station.tags.split(',').slice(0, 3).join(', ') : ''}</p>
+                        <p class="text-[10px] text-slate-500 truncate uppercase tracking-tighter">${station.tags ? station.tags.split(',').slice(0, 3).join(' • ') : ''}</p>
                     </div>
                 </div>
             `).join('');
@@ -327,18 +537,21 @@
             if (!station) return;
             currentStation = station;
 
+            // Reset UI
             document.querySelectorAll('.station-card').forEach(c => c.classList.remove('active-station'));
             document.getElementById(`card-${uuid}`)?.classList.add('active-station');
-
             document.getElementById('player-placeholder').classList.add('hidden');
-            const activePlayer = document.getElementById('active-player');
-            activePlayer.classList.remove('hidden');
+            document.getElementById('active-player').classList.remove('hidden');
+            document.getElementById('ai-insight-box').classList.add('hidden');
 
             document.getElementById('now-playing-name').innerText = station.name;
             document.getElementById('now-playing-tags').innerText = station.tags ? station.tags.split(',').slice(0, 3).join(' • ') : 'RADIO';
             
             const playerImg = document.getElementById('now-playing-img');
             playerImg.src = station.favicon || `https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=400`;
+
+            // Feature 3: AI Welcome (TTS)
+            callGeminiTTS(`Say cheerfully: Welcome to VoxCast AI. Now playing: ${station.name}. Enjoy the vibe.`);
 
             try {
                 audio.pause();
@@ -383,9 +596,9 @@
         }
 
         function showError(msg) {
-            errorToast.innerText = msg;
+            document.getElementById('error-text').innerText = msg;
             errorToast.classList.remove('hidden');
-            setTimeout(() => errorToast.classList.add('hidden'), 6000);
+            setTimeout(() => errorToast.classList.add('hidden'), 5000);
         }
     </script>
 </body>

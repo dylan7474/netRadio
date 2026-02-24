@@ -1,2 +1,43 @@
 # netRadio
-Internet Radio Streamer
+
+netRadio is a lightweight, browser-based internet radio app for discovering and streaming English-language radio stations. It provides a polished single-page interface with search, category filtering, and AI-assisted station discovery prompts.
+
+## What the application is
+
+The project is a static web application (`index.html`) that:
+- Lists curated radio stations with metadata.
+- Streams audio directly in the browser via the built-in `<audio>` player.
+- Supports category filtering (Music, Talk, Science, Technology, News).
+- Includes an AI discovery button for mood-based station suggestions.
+
+A helper script (`deploy.sh`) can package and run the app in Docker with a simple Node static server.
+
+## Basic controls
+
+Inside the app UI:
+- **Search input**: Type station names or keywords to narrow results.
+- **Category chips**: Filter stations by topic.
+- **Station list item**: Click to start playback.
+- **Play/Pause controls**: Manage stream playback.
+- **Volume slider**: Adjust output level.
+- **✨ Discover button**: Use prompt-style discovery for mood or context-based station ideas.
+
+## Build / run instructions
+
+### Option 1: Open directly
+Because this is a static app, you can open `index.html` in your browser.
+
+### Option 2: Run with Docker deploy script
+```bash
+./deploy.sh 3000
+```
+Then visit `http://localhost:3000` (or the local IP printed by the script).
+
+## Roadmap
+
+Short-term ideas for future improvements:
+- Add persistent favorites and recently played stations.
+- Add dark/light theme switching and accessibility refinements.
+- Add health checks with automatic stream fallback on failure.
+- Add keyboard shortcuts for search, play/pause, and volume.
+- Add optional backend endpoint for richer AI station recommendations.

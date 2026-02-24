@@ -14,7 +14,22 @@ echo "=== Deploying ${PROJECT_NAME} ==="
 # 1. Environment Setup
 cd "$SCRIPT_DIR"
 
-# 2. Generate static server.js
+# 2. Generate .dockerignore to prevent large context uploads (Fixes the original hang)
+echo "Generating .dockerignore..."
+cat <<'IGNORE_EOF' > .dockerignore
+.git
+.gitignore
+node_modules
+deploy.sh
+README.md
+LICENSE
+AGENTS.md
+Dockerfile
+.dockerignore
+IGNORE_EOF
+
+# 3. Generate static server.js
+echo "Generating server.js..."
 cat <<'SERVER_EOF' > server.js
 const http = require('http');
 const fs = require('fs');
@@ -109,29 +124,35 @@ http.createServer((req, res) => {
 });
 SERVER_EOF
 
-# 3. Create Dockerfile
+# 4. Create Dockerfile (Optimized to only copy specific files)
 cat <<DOCKER_EOF > Dockerfile
 FROM node:20-slim
 WORKDIR /app
-COPY . ./
+# Only copy the app and server
+COPY index.html server.js ./
 EXPOSE ${PORT_ARG}
 ENV PORT=${PORT_ARG}
 ENV STATIC_ROOT=/app
 CMD ["node", "server.js"]
 DOCKER_EOF
 
-# 4. Build & Launch
+# 5. Build & Launch
+echo "Building Docker image..."
+# Removed --progress=plain to maintain compatibility with legacy builders
 docker build -t "$IMAGE_NAME" .
+
+echo "Stopping existing containers..."
 docker stop "$CONTAINER_NAME" 2>/dev/null || true
 docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
+echo "Starting new container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
   -p "$PORT_ARG":"$PORT_ARG" \
   --restart unless-stopped \
   "$IMAGE_NAME"
 
-# Robust IP detection for laptops
+# Robust IP detection
 IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2>/dev/null || echo "localhost")
 
 echo "========================================="

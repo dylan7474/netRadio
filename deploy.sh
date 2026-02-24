@@ -128,8 +128,8 @@ SERVER_EOF
 cat <<DOCKER_EOF > Dockerfile
 FROM node:20-slim
 WORKDIR /app
-# Only copy the app and server
-COPY index.html server.js ./
+# Only copy static entrypoints and server
+COPY index.html legacy.html server.js ./
 EXPOSE ${PORT_ARG}
 ENV PORT=${PORT_ARG}
 ENV STATIC_ROOT=/app

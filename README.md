@@ -28,11 +28,14 @@ Inside the app UI:
 ### Option 1: Open directly
 Because this is a static app, you can open `index.html` in your browser.
 
+For older Safari/WebKit devices (for example iPad Mini v1 on iOS 9), use `legacy.html`, which avoids modern dependencies and uses ES5-style JavaScript for better compatibility.
+
 ### Option 2: Run with Docker deploy script
 ```bash
 ./deploy.sh 3000
 ```
 Then visit `http://localhost:3000` (or the local IP printed by the script).
+The deployed container serves both `index.html` and `legacy.html` (open `/legacy.html` for older iPad/Safari clients).
 
 ## Roadmap
 

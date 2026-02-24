@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>netRadio Legacy (iPad Mini v1)</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0b1220;
+            color: #e2e8f0;
+        }
+        .container { padding: 14px; }
+        .panel {
+            background: rgba(30, 41, 59, 0.75);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .header { overflow: hidden; margin-bottom: 10px; }
+        .header h1 { float: left; margin: 0; font-size: 20px; }
+        .sub { font-size: 11px; color: #93c5fd; letter-spacing: 1px; text-transform: uppercase; }
+
+        .controls-row { overflow: hidden; }
+        .button {
+            display: inline-block;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 8px;
+            background: #10b981;
+            color: #081018;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+            margin: 0 6px 6px 0;
+            font-size: 13px;
+        }
+        .button.alt {
+            background: #1f2937;
+            color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.14);
+        }
+        .button.warn { background: #ef4444; color: #fff; }
+        .button.full { width: 100%; text-align: center; margin-right: 0; }
+
+        .display {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 0 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .status { font-size: 11px; color: #86efac; text-transform: uppercase; }
+        .label { font-size: 10px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 4px; }
+        .input {
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .range { width: 100%; }
+        .small { font-size: 12px; color: #94a3b8; }
+
+        .category-grid { overflow: hidden; }
+        .category-grid .button { width: 31%; box-sizing: border-box; text-align: center; }
+
+        .station-list {
+            max-height: 260px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            margin-top: 8px;
+            padding-top: 8px;
+        }
+        .station-item {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .station-item.active { border-color: #10b981; }
+        .station-name { font-size: 14px; font-weight: bold; margin: 0 0 4px; }
+        .station-tags { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+
+        .split-2 .button { width: 48%; box-sizing: border-box; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>netRadio Legacy</h1>
+    </div>
+    <div class="sub">iPad Mini v1 friendly interface</div>
+
+    <div class="panel">
+        <div class="status" id="mode-status">Ready</div>
+        <div class="display" id="now-playing">No station selected</div>
+        <div class="small" id="sleep-status">Sleep timer: Off</div>
+    </div>
+
+    <div class="panel">
+        <span class="label">Search stations</span>
+        <input type="text" id="search-input" class="input" placeholder="Search by name or tag">
+
+        <div style="margin-top:10px;" class="category-grid" id="category-buttons">
+            <button class="button alt" data-cat="all">All</button>
+            <button class="button alt" data-cat="music">Music</button>
+            <button class="button alt" data-cat="talk">Talk</button>
+            <button class="button alt" data-cat="news">News</button>
+            <button class="button alt" data-cat="science">Science</button>
+            <button class="button alt" data-cat="technology">Tech</button>
+        </div>
+
+        <div class="station-list" id="station-list"></div>
+    </div>
+
+    <div class="panel">
+        <span class="label">Playback</span>
+        <div class="split-2">
+            <button class="button" id="play-pause-btn">Play</button>
+            <button class="button alt" id="stop-btn">Stop</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <span class="label">Sleep-friendly noise</span>
+        <button class="button alt" id="noise-toggle">Noise: Off</button>
+        <div style="margin-top:8px;">
+            <div class="small" id="mix-label">Noise 0% · Stream 100%</div>
+            <input class="range" type="range" id="mix-slider" min="0" max="100" step="1" value="0">
+        </div>
+    </div>
+
+    <div class="panel">
+        <span class="label">Sleep timer</span>
+        <div class="split-2">
+            <button class="button alt" data-min="15">15 min</button>
+            <button class="button alt" data-min="30">30 min</button>
+        </div>
+        <button class="button warn full" id="sleep-clear">Clear timer</button>
+    </div>
+</div>
+
+<audio id="audio-player" preload="none" playsinline webkit-playsinline></audio>
+<script>
+(function () {
+    var FALLBACK_STATIONS = [
+        { name: 'BBC World Service', tags: 'news,talk,world', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service' },
+        { name: 'Groove Salad (SomaFM)', tags: 'music,chill,ambient', url: 'https://ice1.somafm.com/groovesalad-256-mp3' },
+        { name: 'WNYC FM', tags: 'talk,news,culture', url: 'https://wnyc.streaming.adswizz.com/wnyc-fm-939-mp3' },
+        { name: 'Science Friday', tags: 'science,talk,education', url: 'https://scifri.stream.publicradio.org/scifri.mp3' },
+        { name: 'ABC Classic', tags: 'music,classical', url: 'https://live-radio01.mediahubaustralia.com/2FMW/mp3/' },
+        { name: 'TechnoBase FM', tags: 'music,technology,electronic', url: 'https://listen.technobase.fm/tunein-mp3' }
+    ];
+
+    var audio = document.getElementById('audio-player');
+    var stationListEl = document.getElementById('station-list');
+    var searchInput = document.getElementById('search-input');
+    var modeStatus = document.getElementById('mode-status');
+    var nowPlaying = document.getElementById('now-playing');
+    var playPauseBtn = document.getElementById('play-pause-btn');
+    var stopBtn = document.getElementById('stop-btn');
+    var mixSlider = document.getElementById('mix-slider');
+    var mixLabel = document.getElementById('mix-label');
+    var noiseToggle = document.getElementById('noise-toggle');
+    var sleepStatus = document.getElementById('sleep-status');
+
+    var state = {
+        stations: FALLBACK_STATIONS,
+        selectedCategory: 'all',
+        selectedStation: null,
+        noiseMode: 'off',
+        mix: 0,
+        sleepTimerId: null,
+        sleepEndTime: 0
+    };
+
+    var noiseContext = null;
+    var noiseSource = null;
+    var noiseGain = null;
+    var baseNoiseGain = 0.12;
+
+    function bindTap(el, fn) {
+        if (!el) return;
+        el.onclick = fn;
+        el.ontouchstart = function (e) {
+            if (e && e.preventDefault) e.preventDefault();
+            fn.call(el, e);
+        };
+    }
+
+    function showMessage(text) {
+        modeStatus.innerHTML = text;
+    }
+
+    function updateMix() {
+        var noisePct = parseInt(mixSlider.value, 10) || 0;
+        var streamPct = 100 - noisePct;
+        state.mix = noisePct / 100;
+        mixLabel.innerHTML = 'Noise ' + noisePct + '% · Stream ' + streamPct + '%';
+        audio.volume = streamPct / 100;
+        if (noiseGain) noiseGain.gain.value = baseNoiseGain * state.mix;
+    }
+
+    function buildNoiseBuffer(context, mode) {
+        var size = context.sampleRate * 2;
+        var buffer = context.createBuffer(1, size, context.sampleRate);
+        var data = buffer.getChannelData(0);
+        var i;
+
+        if (mode === 'blue') {
+            var lastWhite = 0;
+            for (i = 0; i < size; i++) {
+                var white = Math.random() * 2 - 1;
+                data[i] = (white - lastWhite) * 0.5;
+                lastWhite = white;
+            }
+        } else if (mode === 'pink') {
+            var b0 = 0, b1 = 0, b2 = 0;
+            for (i = 0; i < size; i++) {
+                var whiteP = Math.random() * 2 - 1;
+                b0 = 0.99765 * b0 + whiteP * 0.0990460;
+                b1 = 0.96300 * b1 + whiteP * 0.2965164;
+                b2 = 0.57000 * b2 + whiteP * 1.0526913;
+                data[i] = b0 + b1 + b2 + whiteP * 0.1848;
+                data[i] *= 0.05;
+            }
+        } else {
+            for (i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+    }
+
+    function stopNoise() {
+        if (noiseSource) {
+            noiseSource.stop(0);
+            noiseSource.disconnect();
+            noiseSource = null;
+        }
+    }
+
+    function startNoise() {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) {
+            showMessage('WebAudio not supported on this browser');
+            state.noiseMode = 'off';
+            noiseToggle.innerHTML = 'Noise: Off';
+            return;
+        }
+        if (!noiseContext) noiseContext = new AC();
+        if (noiseContext.state === 'suspended' && noiseContext.resume) noiseContext.resume();
+
+        stopNoise();
+        noiseSource = noiseContext.createBufferSource();
+        noiseSource.buffer = buildNoiseBuffer(noiseContext, state.noiseMode);
+        noiseSource.loop = true;
+        noiseGain = noiseContext.createGain();
+        noiseGain.gain.value = baseNoiseGain * state.mix;
+        noiseSource.connect(noiseGain);
+        noiseGain.connect(noiseContext.destination);
+        noiseSource.start(0);
+    }
+
+    function cycleNoiseMode() {
+        if (state.noiseMode === 'off') state.noiseMode = 'white';
+        else if (state.noiseMode === 'white') state.noiseMode = 'blue';
+        else if (state.noiseMode === 'blue') state.noiseMode = 'pink';
+        else state.noiseMode = 'off';
+
+        noiseToggle.innerHTML = 'Noise: ' + state.noiseMode.toUpperCase();
+        if (state.noiseMode === 'off') {
+            stopNoise();
+            showMessage('Noise disabled');
+        } else {
+            startNoise();
+            showMessage('Noise ' + state.noiseMode.toUpperCase() + ' enabled');
+        }
+    }
+
+    function playStation(station) {
+        state.selectedStation = station;
+        nowPlaying.innerHTML = station.name;
+        audio.src = station.url;
+        audio.load();
+        var p;
+        try {
+            p = audio.play();
+            if (p && p.catch) p.catch(function () { showMessage('Tap Play to start stream'); });
+        } catch (err) {
+            showMessage('Tap Play to start stream');
+        }
+        renderStations();
+    }
+
+    function togglePlayPause() {
+        if (!state.selectedStation) {
+            if (state.stations.length) playStation(state.stations[0]);
+            return;
+        }
+        if (audio.paused) {
+            var p = audio.play();
+            if (p && p.catch) p.catch(function () { showMessage('Unable to play stream'); });
+        } else {
+            audio.pause();
+        }
+    }
+
+    function renderStations() {
+        var q = (searchInput.value || '').toLowerCase();
+        stationListEl.innerHTML = '';
+
+        var i;
+        var count = 0;
+        for (i = 0; i < state.stations.length; i++) {
+            var s = state.stations[i];
+            var tags = (s.tags || '').toLowerCase();
+            var name = (s.name || '').toLowerCase();
+            var matchesSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+            var matchesCategory = state.selectedCategory === 'all' || tags.indexOf(state.selectedCategory) !== -1;
+            if (!matchesSearch || !matchesCategory) continue;
+            count++;
+
+            var row = document.createElement('div');
+            row.className = 'station-item' + (state.selectedStation && state.selectedStation.url === s.url ? ' active' : '');
+
+            var title = document.createElement('div');
+            title.className = 'station-name';
+            title.innerHTML = s.name;
+            row.appendChild(title);
+
+            var tag = document.createElement('div');
+            tag.className = 'station-tags';
+            tag.innerHTML = s.tags || 'radio';
+            row.appendChild(tag);
+
+            var btn = document.createElement('button');
+            btn.className = 'button';
+            btn.innerHTML = 'Tune';
+            (function (stationRef) {
+                bindTap(btn, function () { playStation(stationRef); });
+            }(s));
+            row.appendChild(btn);
+
+            stationListEl.appendChild(row);
+        }
+
+        if (!count) {
+            stationListEl.innerHTML = '<div class="small">No stations found for this search/category.</div>';
+        }
+    }
+
+    function setCategory(cat) {
+        state.selectedCategory = cat;
+        renderStations();
+    }
+
+    function setSleepTimer(mins) {
+        clearSleepTimer();
+        state.sleepEndTime = new Date().getTime() + mins * 60000;
+        state.sleepTimerId = setInterval(function () {
+            var remain = state.sleepEndTime - new Date().getTime();
+            if (remain <= 0) {
+                clearSleepTimer();
+                audio.pause();
+                sleepStatus.innerHTML = 'Sleep timer: Ended';
+                return;
+            }
+            var s = Math.floor(remain / 1000);
+            var m = Math.floor(s / 60);
+            var ss = s % 60;
+            sleepStatus.innerHTML = 'Sleep timer: ' + (m < 10 ? '0' + m : m) + ':' + (ss < 10 ? '0' + ss : ss);
+        }, 1000);
+        sleepStatus.innerHTML = 'Sleep timer: started (' + mins + ' min)';
+    }
+
+    function clearSleepTimer() {
+        if (state.sleepTimerId) {
+            clearInterval(state.sleepTimerId);
+            state.sleepTimerId = null;
+        }
+        state.sleepEndTime = 0;
+        sleepStatus.innerHTML = 'Sleep timer: Off';
+    }
+
+    function fetchStationSuggestions() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://de1.api.radio-browser.info/json/stations/search?language=english&limit=30&hidebroken=true', true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var list = JSON.parse(xhr.responseText);
+                    if (list && list.length) {
+                        var merged = [];
+                        var i;
+                        for (i = 0; i < list.length; i++) {
+                            merged.push({
+                                name: list[i].name || 'Unnamed station',
+                                tags: list[i].tags || 'radio',
+                                url: list[i].url_resolved || list[i].url || ''
+                            });
+                        }
+                        state.stations = merged.concat(FALLBACK_STATIONS);
+                        showMessage('Loaded online station list');
+                        renderStations();
+                        return;
+                    }
+                } catch (e) {}
+            }
+            showMessage('Using built-in station list (offline/cors issue)');
+            state.stations = FALLBACK_STATIONS;
+            renderStations();
+        };
+        xhr.send(null);
+    }
+
+    audio.onplay = function () { playPauseBtn.innerHTML = 'Pause'; showMessage('Playing'); };
+    audio.onpause = function () { playPauseBtn.innerHTML = 'Play'; showMessage('Paused'); };
+    audio.onerror = function () { showMessage('Stream unavailable. Try another station.'); };
+
+    bindTap(playPauseBtn, togglePlayPause);
+    bindTap(stopBtn, function () { audio.pause(); audio.removeAttribute('src'); audio.load(); nowPlaying.innerHTML = 'No station selected'; });
+    bindTap(noiseToggle, cycleNoiseMode);
+
+    mixSlider.oninput = updateMix;
+    searchInput.onkeyup = renderStations;
+
+    var catButtons = document.getElementById('category-buttons').getElementsByTagName('button');
+    var i;
+    for (i = 0; i < catButtons.length; i++) {
+        (function (btn) {
+            bindTap(btn, function () { setCategory(btn.getAttribute('data-cat')); });
+        }(catButtons[i]));
+    }
+
+    var sleepButtons = document.querySelectorAll('[data-min]');
+    for (i = 0; i < sleepButtons.length; i++) {
+        (function (btn2) {
+            bindTap(btn2, function () { setSleepTimer(parseInt(btn2.getAttribute('data-min'), 10)); });
+        }(sleepButtons[i]));
+    }
+    bindTap(document.getElementById('sleep-clear'), clearSleepTimer);
+
+    updateMix();
+    renderStations();
+    fetchStationSuggestions();
+}());
+</script>
+</body>
+</html>

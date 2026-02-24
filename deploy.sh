@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-PORT_ARG=${1:-3000}
+PORT_ARG=${1:-3009}
 PROJECT_NAME="netRadio"
 IMAGE_NAME="netradio"
 CONTAINER_NAME="netradio"

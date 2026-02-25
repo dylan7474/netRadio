@@ -391,35 +391,80 @@
     }
 
     function fetchStationSuggestions() {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'https://de1.api.radio-browser.info/json/stations/search?language=english&limit=30&hidebroken=true', true);
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    var list = JSON.parse(xhr.responseText);
-                    if (list && list.length) {
-                        var merged = [];
-                        var i;
-                        for (i = 0; i < list.length; i++) {
-                            merged.push({
-                                name: list[i].name || 'Unnamed station',
-                                tags: list[i].tags || 'radio',
-                                url: list[i].url_resolved || list[i].url || ''
-                            });
-                        }
-                        state.stations = merged.concat(FALLBACK_STATIONS);
-                        showMessage('Loaded online station list');
-                        renderStations();
-                        return;
-                    }
-                } catch (e) {}
-            }
-            showMessage('Using built-in station list (offline/cors issue)');
+        var endpoint = '/stations/search?language=english&limit=30&hidebroken=true';
+        var mirrors = [
+            'https://all.api.radio-browser.info/json',
+            'https://de1.api.radio-browser.info/json',
+            'https://nl1.api.radio-browser.info/json'
+        ];
+
+        // Older iOS Safari often runs this page from file://, where CORS always blocks API calls.
+        if (window.location && window.location.protocol === 'file:') {
             state.stations = FALLBACK_STATIONS;
             renderStations();
-        };
-        xhr.send(null);
+            showMessage('Using built-in station list (open via web server for online catalog)');
+            return;
+        }
+
+        function useFallback(message) {
+            state.stations = FALLBACK_STATIONS;
+            renderStations();
+            showMessage(message || 'Using built-in station list');
+        }
+
+        function fetchFromMirror(index) {
+            if (index >= mirrors.length) {
+                useFallback('Using built-in station list (online catalog unavailable)');
+                return;
+            }
+
+            var xhr = new XMLHttpRequest();
+            var timedOut = false;
+            var timeoutId = setTimeout(function () {
+                timedOut = true;
+                try { xhr.abort(); } catch (e) {}
+                fetchFromMirror(index + 1);
+            }, 6000);
+
+            xhr.open('GET', mirrors[index] + endpoint, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || timedOut) return;
+                clearTimeout(timeoutId);
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        var list = JSON.parse(xhr.responseText);
+                        if (list && list.length) {
+                            var merged = [];
+                            var i;
+                            for (i = 0; i < list.length; i++) {
+                                merged.push({
+                                    name: list[i].name || 'Unnamed station',
+                                    tags: list[i].tags || 'radio',
+                                    url: list[i].url_resolved || list[i].url || ''
+                                });
+                            }
+                            state.stations = merged.concat(FALLBACK_STATIONS);
+                            showMessage('Loaded online station list');
+                            renderStations();
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                fetchFromMirror(index + 1);
+            };
+
+            xhr.onerror = function () {
+                if (timedOut) return;
+                clearTimeout(timeoutId);
+                fetchFromMirror(index + 1);
+            };
+
+            xhr.send(null);
+        }
+
+        fetchFromMirror(0);
     }
 
     audio.onplay = function () { playPauseBtn.innerHTML = 'Pause'; showMessage('Playing'); };

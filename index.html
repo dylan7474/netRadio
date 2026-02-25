@@ -272,6 +272,91 @@
         let sleepTimerId = null;
         let sleepTimerEndsAt = null;
         let sleepTimerTickerId = null;
+        const BAD_STATION_TTL_MS = 24 * 60 * 60 * 1000;
+        const BAD_STATION_CACHE_KEY = 'netradioBadStationsV1';
+
+        function getStationId(station) {
+            return station?.stationuuid || station?.url_resolved || station?.url || null;
+        }
+
+        function loadBadStationCache() {
+            try {
+                const raw = localStorage.getItem(BAD_STATION_CACHE_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') return {};
+                return parsed;
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function pruneBadStationCache(cache = loadBadStationCache()) {
+            const now = Date.now();
+            const next = {};
+            Object.entries(cache).forEach(([stationId, expiresAt]) => {
+                if (Number(expiresAt) > now) next[stationId] = Number(expiresAt);
+            });
+            try {
+                localStorage.setItem(BAD_STATION_CACHE_KEY, JSON.stringify(next));
+            } catch (e) {}
+            return next;
+        }
+
+        function markStationBad(station) {
+            const stationId = getStationId(station);
+            if (!stationId) return;
+            const cache = pruneBadStationCache();
+            cache[stationId] = Date.now() + BAD_STATION_TTL_MS;
+            try {
+                localStorage.setItem(BAD_STATION_CACHE_KEY, JSON.stringify(cache));
+            } catch (e) {}
+        }
+
+        function clearStationBad(station) {
+            const stationId = getStationId(station);
+            if (!stationId) return;
+            const cache = pruneBadStationCache();
+            if (!cache[stationId]) return;
+            delete cache[stationId];
+            try {
+                localStorage.setItem(BAD_STATION_CACHE_KEY, JSON.stringify(cache));
+            } catch (e) {}
+        }
+
+        function isStationBad(station, cache = pruneBadStationCache()) {
+            const stationId = getStationId(station);
+            return !!(stationId && cache[stationId]);
+        }
+
+        function reliabilityScore(station) {
+            const clickcount = Number(station?.clickcount) || 0;
+            const votes = Number(station?.votes) || 0;
+            const lastCheckOk = Number(station?.lastcheckok) === 1 ? 1 : 0;
+            const bitrate = Number(station?.bitrate) || 0;
+            const secureBoost = (station?.url_resolved || station?.url || '').startsWith('https') ? 1 : 0;
+
+            const now = Date.now();
+            const lastOkMs = station?.lastcheckoktime ? Date.parse(station.lastcheckoktime) : NaN;
+            const hoursSinceLastOk = Number.isNaN(lastOkMs) ? 999 : Math.max(0, (now - lastOkMs) / (1000 * 60 * 60));
+            const recentCheckBoost = Math.max(0, 24 - Math.min(24, hoursSinceLastOk));
+
+            return (
+                secureBoost * 25 +
+                lastCheckOk * 30 +
+                recentCheckBoost +
+                Math.min(30, bitrate / 8) +
+                Math.log10(clickcount + 1) * 10 +
+                Math.log10(votes + 1) * 10
+            );
+        }
+
+        function rankAndFilterStations(results, limit = 50) {
+            const badCache = pruneBadStationCache();
+            const ranked = (results || []).slice().sort((a, b) => reliabilityScore(b) - reliabilityScore(a));
+            const filtered = ranked.filter(station => !isStationBad(station, badCache));
+            return filtered.slice(0, limit);
+        }
 
         // Gemini API Utility
         async function callGemini(prompt, systemInstruction = "") {
@@ -627,6 +712,11 @@
         function handleFatalError() {
             showError("Stream unavailable. It might be blocked by browser security or the station is offline.");
             setPlayingState(false);
+            if (currentStation) {
+                markStationBad(currentStation);
+                stations = stations.filter(s => getStationId(s) !== getStationId(currentStation));
+                renderStations(stations);
+            }
         }
 
         async function fetchStationsWithFallback(tag, limit = 60, searchParam = 'tag') {
@@ -682,11 +772,10 @@
 
                 if (results.length === 0) throw new Error("No results");
 
-                stations = results.sort((a, b) => {
-                    const aSec = (a.url_resolved || a.url).startsWith('https');
-                    const bSec = (b.url_resolved || b.url).startsWith('https');
-                    return bSec - aSec;
-                }).slice(0, 50);
+                stations = rankAndFilterStations(results, 50);
+                if (stations.length === 0) {
+                    showError('Stations in this category are temporarily hidden after recent playback failures. Retry later.');
+                }
 
             } catch (err) {
                 stations = FALLBACK_STATIONS.filter(s => s.tags.includes(category) || category === 'music');
@@ -756,7 +845,10 @@
                 
                 const playPromise = audio.play();
                 if (playPromise !== undefined) {
-                    playPromise.then(() => setPlayingState(true))
+                    playPromise.then(() => {
+                                   clearStationBad(station);
+                                   setPlayingState(true);
+                               })
                                .catch(err => {
                                    if (err.name !== 'AbortError') handleFatalError();
                                });

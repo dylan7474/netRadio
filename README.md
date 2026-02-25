@@ -22,6 +22,8 @@ Inside the app UI:
 - **Sleep-friendly noise section**: Tap the noise button to cycle `OFF → WHITE NOISE → BLUE NOISE → PINK NOISE → OFF`, then use the mix slider from 0% noise / 100% audio to 100% noise / 0% audio.
 - **Sleep timer**: Set a timer (10–60 minutes) to automatically pause playback.
 - **✨ Discover button**: Use prompt-style discovery for mood or context-based station ideas.
+- **Stream reliability ranking**: Online stations are ranked using Radio Browser quality signals (recent successful checks, votes/clicks, bitrate, and HTTPS preference) instead of clickcount alone.
+- **Bad station cache**: Stations that fail playback are temporarily hidden for 24 hours using local browser storage to reduce repeated failures in the channel list.
 
 ## Build / run instructions
 

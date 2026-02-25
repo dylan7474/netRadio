@@ -393,6 +393,7 @@
     function fetchStationSuggestions() {
         var endpoint = '/stations/search?language=english&limit=30&hidebroken=true';
         var mirrors = [
+            '/stations/search?language=english&limit=30&hidebroken=true',
             'https://all.api.radio-browser.info/json',
             'https://de1.api.radio-browser.info/json',
             'https://nl1.api.radio-browser.info/json'
@@ -426,7 +427,8 @@
                 fetchFromMirror(index + 1);
             }, 6000);
 
-            xhr.open('GET', mirrors[index] + endpoint, true);
+            var requestUrl = mirrors[index].charAt(0) === '/' ? mirrors[index] : mirrors[index] + endpoint;
+            xhr.open('GET', requestUrl, true);
             xhr.onreadystatechange = function () {
                 if (xhr.readyState !== 4 || timedOut) return;
                 clearTimeout(timeoutId);

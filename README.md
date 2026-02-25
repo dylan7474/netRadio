@@ -30,6 +30,7 @@ Because this is a static app, you can open `index.html` in your browser.
 
 For older Safari/WebKit devices (for example iPad Mini v1 on iOS 9), use `legacy.html`, which avoids modern dependencies and uses ES5-style JavaScript for better compatibility.
 When `legacy.html` is opened via `file://`, it automatically uses the built-in station list because older Safari versions may block remote station catalog requests in that mode.
+When `legacy.html` is served via `deploy.sh`, the generated server now proxies `/stations/search` requests so older iOS Safari clients can still load the online catalogue even when direct TLS/CORS requests fail.
 
 ### Option 2: Run with Docker deploy script
 ```bash

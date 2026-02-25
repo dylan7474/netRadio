@@ -32,6 +32,7 @@ IGNORE_EOF
 echo "Generating server.js..."
 cat <<'SERVER_EOF' > server.js
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
@@ -51,6 +52,12 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
+
+const RADIO_BROWSER_MIRRORS = [
+  'https://de1.api.radio-browser.info/json',
+  'https://nl1.api.radio-browser.info/json',
+  'https://all.api.radio-browser.info/json',
+];
 
 const serveStatic = (req, res, url) => {
   const pathname = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
@@ -116,8 +123,75 @@ const serveStatic = (req, res, url) => {
   });
 };
 
+const proxyStationsSearch = (req, res, url) => {
+  const passthrough = ['name', 'tag', 'country', 'language', 'order', 'reverse', 'limit', 'hidebroken'];
+  const upstreamQuery = new URLSearchParams();
+  passthrough.forEach((key) => {
+    const value = url.searchParams.get(key);
+    if (value !== null) upstreamQuery.set(key, value);
+  });
+
+  if (!upstreamQuery.has('limit')) upstreamQuery.set('limit', '30');
+  if (!upstreamQuery.has('hidebroken')) upstreamQuery.set('hidebroken', 'true');
+
+  const tryMirror = (index) => {
+    if (index >= RADIO_BROWSER_MIRRORS.length) {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Unable to load station catalog' }));
+      return;
+    }
+
+    const mirror = RADIO_BROWSER_MIRRORS[index];
+    const upstreamUrl = `${mirror}/stations/search?${upstreamQuery.toString()}`;
+
+    const upstreamReq = https.get(upstreamUrl, {
+      headers: {
+        'User-Agent': 'netRadio/legacy-proxy',
+        'Accept': 'application/json',
+      },
+      timeout: 6000,
+    }, (upstreamRes) => {
+      if (upstreamRes.statusCode < 200 || upstreamRes.statusCode >= 300) {
+        upstreamRes.resume();
+        tryMirror(index + 1);
+        return;
+      }
+
+      const chunks = [];
+      upstreamRes.on('data', (chunk) => chunks.push(chunk));
+      upstreamRes.on('end', () => {
+        const body = Buffer.concat(chunks);
+        try {
+          JSON.parse(body.toString('utf8'));
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=120',
+          });
+          res.end(body);
+        } catch (err) {
+          tryMirror(index + 1);
+        }
+      });
+    });
+
+    upstreamReq.on('timeout', () => {
+      upstreamReq.destroy(new Error('upstream timeout'));
+    });
+
+    upstreamReq.on('error', () => {
+      tryMirror(index + 1);
+    });
+  };
+
+  tryMirror(0);
+};
+
 http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname === '/stations/search') {
+    proxyStationsSearch(req, res, url);
+    return;
+  }
   serveStatic(req, res, url);
 }).listen(PORT, () => {
   console.log(`netRadio static server listening on port ${PORT}`);

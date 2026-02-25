@@ -32,6 +32,7 @@ For older Safari/WebKit devices (for example iPad Mini v1 on iOS 9), use `legacy
 When `legacy.html` is opened via `file://`, it automatically uses the built-in station list because older Safari versions may block remote station catalog requests in that mode.
 When `legacy.html` is served via `deploy.sh`, the generated server now proxies `/stations/search` requests so older iOS Safari clients can still load the online catalogue even when direct TLS/CORS requests fail.
 The legacy station picker is touch-scroll friendly while playing, and category filters now expand tag matching (for example Tech/News synonyms) to surface more relevant stations.
+The legacy Technology category now favors technology talk/news stations and filters out tech-themed music tags (such as techno/electronic), and the default legacy station list/catalog seed is broader to better match the full app availability.
 
 ### Option 2: Run with Docker deploy script
 ```bash

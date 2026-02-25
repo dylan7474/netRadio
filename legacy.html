@@ -154,11 +154,19 @@
 (function () {
     var FALLBACK_STATIONS = [
         { name: 'BBC World Service', tags: 'news,talk,world', url: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service' },
-        { name: 'Groove Salad (SomaFM)', tags: 'music,chill,ambient', url: 'https://ice1.somafm.com/groovesalad-256-mp3' },
+        { name: 'NPR Program Stream', tags: 'news,talk,public radio', url: 'https://npr-ice.streamguys1.com/live.mp3' },
         { name: 'WNYC FM', tags: 'talk,news,culture', url: 'https://wnyc.streaming.adswizz.com/wnyc-fm-939-mp3' },
+        { name: 'CBC Radio One Toronto', tags: 'news,talk,current affairs', url: 'https://cbcradiolive.akamaized.net/hls/live/2041027/ES_R1TO/master.m3u8' },
+        { name: 'KQED Public Radio', tags: 'news,talk,culture', url: 'https://kqed.streamguys1.com/kqedradio' },
         { name: 'Science Friday', tags: 'science,talk,education', url: 'https://scifri.stream.publicradio.org/scifri.mp3' },
+        { name: 'NASA Third Rock Radio', tags: 'science,space,education', url: 'https://nasaradiolive.akamaized.net/hls/live/2038265/Live/audio_128kbps.m3u8' },
+        { name: 'TWiT Live', tags: 'technology,talk,computers,podcast', url: 'https://twit.am/listen' },
+        { name: 'LBC News', tags: 'news,talk,politics', url: 'https://media-ice.musicradio.com/LBCUKMP3' },
+        { name: 'Groove Salad (SomaFM)', tags: 'music,chill,ambient', url: 'https://ice1.somafm.com/groovesalad-256-mp3' },
         { name: 'ABC Classic', tags: 'music,classical', url: 'https://live-radio01.mediahubaustralia.com/2FMW/mp3/' },
-        { name: 'TechnoBase FM', tags: 'music,technology,electronic', url: 'https://listen.technobase.fm/tunein-mp3' }
+        { name: 'Jazz24', tags: 'music,jazz', url: 'https://live.wostreaming.net/direct/ppm-jazz24mp3-ibc1' },
+        { name: 'KEXP 90.3 FM', tags: 'music,indie,alternative', url: 'https://kexp.streamguys1.com/kexp160.aac' },
+        { name: 'Classic FM', tags: 'music,classical', url: 'https://media-ice.musicradio.com/ClassicFMMP3' }
     ];
 
     var audio = document.getElementById('audio-player');
@@ -338,14 +346,7 @@
             var matchesSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
             var matchesCategory = state.selectedCategory === 'all';
             if (!matchesCategory) {
-                var catTags = getCategoryTags(state.selectedCategory);
-                var c;
-                for (c = 0; c < catTags.length; c++) {
-                    if (tags.indexOf(catTags[c]) !== -1) {
-                        matchesCategory = true;
-                        break;
-                    }
-                }
+                matchesCategory = matchesCategoryFilter(state.selectedCategory, s);
             }
             if (!matchesSearch || !matchesCategory) continue;
             count++;
@@ -379,9 +380,43 @@
         }
     }
 
+    function hasAny(text, options) {
+        var i;
+        for (i = 0; i < options.length; i++) {
+            if (text.indexOf(options[i]) !== -1) return true;
+        }
+        return false;
+    }
+
+    function matchesCategoryFilter(cat, station) {
+        var tags = ((station && station.tags) || '').toLowerCase();
+        var name = ((station && station.name) || '').toLowerCase();
+        var combined = tags + ' ' + name;
+        var catTags = getCategoryTags(cat);
+        var c;
+        var hasCategoryKeyword = false;
+
+        for (c = 0; c < catTags.length; c++) {
+            if (combined.indexOf(catTags[c]) !== -1) {
+                hasCategoryKeyword = true;
+                break;
+            }
+        }
+        if (!hasCategoryKeyword) return false;
+
+        if (cat === 'technology') {
+            var talkNewsSignals = ['talk', 'news', 'podcast', 'public radio', 'information', 'interview'];
+            var musicSignals = ['music', 'dance', 'techno', 'trance', 'edm', 'house', 'dj', 'electronic'];
+            if (hasAny(combined, talkNewsSignals)) return true;
+            if (hasAny(combined, musicSignals)) return false;
+        }
+
+        return true;
+    }
+
     function getCategoryTags(cat) {
         var tagMap = {
-            technology: ['technology', 'tech', 'electronic', 'computer'],
+            technology: ['technology', 'tech', 'computer', 'computers', 'it', 'ai', 'startup', 'digital', 'innovation', 'cyber', 'programming'],
             news: ['news', 'current affairs', 'world', 'politics'],
             science: ['science', 'education', 'knowledge', 'documentary'],
             talk: ['talk', 'podcast', 'culture', 'public radio'],
@@ -445,9 +480,9 @@
     }
 
     function fetchStationSuggestions() {
-        var endpoint = '/stations/search?language=english&limit=30&hidebroken=true';
+        var endpoint = '/stations/search?language=english&limit=150&hidebroken=true&order=clickcount&reverse=true';
         var mirrors = [
-            '/stations/search?language=english&limit=30&hidebroken=true',
+            '/stations/search?language=english&limit=150&hidebroken=true&order=clickcount&reverse=true',
             'https://all.api.radio-browser.info/json',
             'https://de1.api.radio-browser.info/json',
             'https://nl1.api.radio-browser.info/json'
@@ -500,7 +535,7 @@
                                     url: list[i].url_resolved || list[i].url || ''
                                 });
                             }
-                            state.stations = merged.concat(FALLBACK_STATIONS);
+                            state.stations = mergeStations(merged, FALLBACK_STATIONS);
                             showMessage('Loaded online station list');
                             renderStations();
                             return;
@@ -570,13 +605,14 @@
                             var fresh = [];
                             var i;
                             for (i = 0; i < list.length; i++) {
-                                fresh.push({
+                                var candidate = {
                                     name: list[i].name || 'Unnamed station',
                                     tags: list[i].tags || 'radio',
                                     url: list[i].url_resolved || list[i].url || ''
-                                });
+                                };
+                                if (matchesCategoryFilter(cat, candidate)) fresh.push(candidate);
                             }
-                            state.stations = mergeStations(fresh, FALLBACK_STATIONS);
+                            state.stations = mergeStations(fresh, state.stations);
                             renderStations();
                             showMessage('Loaded more ' + cat + ' stations');
                             return;

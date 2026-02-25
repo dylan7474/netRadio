@@ -191,7 +191,19 @@
     function bindTap(el, fn) {
         if (!el) return;
         el.onclick = fn;
+        var touchStartX = 0;
+        var touchStartY = 0;
         el.ontouchstart = function (e) {
+            var t = e && e.changedTouches ? e.changedTouches[0] : null;
+            if (!t) return;
+            touchStartX = t.clientX;
+            touchStartY = t.clientY;
+        };
+        el.ontouchend = function (e) {
+            var t = e && e.changedTouches ? e.changedTouches[0] : null;
+            if (!t) return;
+            var moved = Math.abs(t.clientX - touchStartX) > 10 || Math.abs(t.clientY - touchStartY) > 10;
+            if (moved) return;
             if (e && e.preventDefault) e.preventDefault();
             fn.call(el, e);
         };
@@ -324,7 +336,17 @@
             var tags = (s.tags || '').toLowerCase();
             var name = (s.name || '').toLowerCase();
             var matchesSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
-            var matchesCategory = state.selectedCategory === 'all' || tags.indexOf(state.selectedCategory) !== -1;
+            var matchesCategory = state.selectedCategory === 'all';
+            if (!matchesCategory) {
+                var catTags = getCategoryTags(state.selectedCategory);
+                var c;
+                for (c = 0; c < catTags.length; c++) {
+                    if (tags.indexOf(catTags[c]) !== -1) {
+                        matchesCategory = true;
+                        break;
+                    }
+                }
+            }
             if (!matchesSearch || !matchesCategory) continue;
             count++;
 
@@ -357,9 +379,41 @@
         }
     }
 
+    function getCategoryTags(cat) {
+        var tagMap = {
+            technology: ['technology', 'tech', 'electronic', 'computer'],
+            news: ['news', 'current affairs', 'world', 'politics'],
+            science: ['science', 'education', 'knowledge', 'documentary'],
+            talk: ['talk', 'podcast', 'culture', 'public radio'],
+            music: ['music', 'rock', 'pop', 'jazz']
+        };
+        return tagMap[cat] || [cat];
+    }
+
     function setCategory(cat) {
         state.selectedCategory = cat;
         renderStations();
+        fetchCategoryStations(cat);
+    }
+
+    function mergeStations(primary, secondary) {
+        var merged = [];
+        var seen = {};
+        var i;
+
+        function appendList(list) {
+            for (i = 0; i < list.length; i++) {
+                var s = list[i];
+                var key = (s.url || '') + '|' + (s.name || '');
+                if (!s.url || seen[key]) continue;
+                seen[key] = true;
+                merged.push(s);
+            }
+        }
+
+        appendList(primary || []);
+        appendList(secondary || []);
+        return merged;
     }
 
     function setSleepTimer(mins) {
@@ -467,6 +521,82 @@
         }
 
         fetchFromMirror(0);
+    }
+
+    function fetchCategoryStations(cat) {
+        if (cat === 'all' || !cat) return;
+        if (window.location && window.location.protocol === 'file:') return;
+
+        var tags = getCategoryTags(cat);
+        var mirrors = [
+            'https://de1.api.radio-browser.info/json',
+            'https://nl1.api.radio-browser.info/json',
+            'https://all.api.radio-browser.info/json'
+        ];
+        var mirrorIndex = 0;
+        var tagIndex = 0;
+
+        function nextRequest() {
+            if (mirrorIndex >= mirrors.length) {
+                showMessage('Showing cached stations for ' + cat);
+                return;
+            }
+            if (tagIndex >= tags.length) {
+                tagIndex = 0;
+                mirrorIndex++;
+                nextRequest();
+                return;
+            }
+
+            var tag = tags[tagIndex++];
+            var url = mirrors[mirrorIndex] + '/stations/search?tag=' + encodeURIComponent(tag) + '&limit=60&hidebroken=true&order=clickcount&reverse=true';
+            var xhr = new XMLHttpRequest();
+            var timedOut = false;
+            var timeoutId = setTimeout(function () {
+                timedOut = true;
+                try { xhr.abort(); } catch (e) {}
+                nextRequest();
+            }, 5000);
+
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || timedOut) return;
+                clearTimeout(timeoutId);
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        var list = JSON.parse(xhr.responseText);
+                        if (list && list.length) {
+                            var fresh = [];
+                            var i;
+                            for (i = 0; i < list.length; i++) {
+                                fresh.push({
+                                    name: list[i].name || 'Unnamed station',
+                                    tags: list[i].tags || 'radio',
+                                    url: list[i].url_resolved || list[i].url || ''
+                                });
+                            }
+                            state.stations = mergeStations(fresh, FALLBACK_STATIONS);
+                            renderStations();
+                            showMessage('Loaded more ' + cat + ' stations');
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                nextRequest();
+            };
+
+            xhr.onerror = function () {
+                if (timedOut) return;
+                clearTimeout(timeoutId);
+                nextRequest();
+            };
+
+            xhr.send(null);
+        }
+
+        nextRequest();
     }
 
     audio.onplay = function () { playPauseBtn.innerHTML = 'Pause'; showMessage('Playing'); };
